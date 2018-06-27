@@ -1,56 +1,106 @@
-# [[[source: .
-set(ide_source_group "Source Files")
-set(source-group
-    "${CMAKE_CURRENT_SOURCE_DIR}/main.cc")
-source_group("${ide_source_group}" FILES ${source-group})
-set(source
-    ${source-group})
-# ]]]
+## Copy sources of libraries in the current folder to prepare setuptools source package
 
-if (NOT PYCLINGO_INSTALL_DIR AND PYTHON_EXECUTABLE)
-    if (PYCLINGO_USER_INSTALL)
-        execute_process(COMMAND ${PYTHON_EXECUTABLE} -m site --user-site OUTPUT_VARIABLE PYCLINGO_INSTALL_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-    elseif(PYCLINGO_USE_INSTALL_PREFIX)
-        execute_process(COMMAND ${PYTHON_EXECUTABLE} ${CLINGO_SOURCE_DIR}/cmake/python-site.py prefix "${CMAKE_INSTALL_PREFIX}" OUTPUT_VARIABLE PYCLINGO_INSTALL_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-    else()
-        execute_process(COMMAND ${PYTHON_EXECUTABLE} ${CLINGO_SOURCE_DIR}/cmake/python-site.py prefix OUTPUT_VARIABLE PYCLINGO_INSTALL_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-    endif()
-endif()
+# libpotassco
+file(COPY "${PROJECT_SOURCE_DIR}/clasp/libpotassco/potassco" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/libpotassco/"
+    FILES_MATCHING PATTERN *.h*)
+file(COPY "${PROJECT_SOURCE_DIR}/clasp/libpotassco/src" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/libpotassco/")
 
-if (NOT PYCLINGO_SUFFIX)
-    if (PYTHON_EXECUTABLE)
-        execute_process(COMMAND ${PYTHON_EXECUTABLE} ${CLINGO_SOURCE_DIR}/cmake/python-site.py suffix OUTPUT_VARIABLE PYCLINGO_SUFFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
-    else()
-        if (CYGWIN)
-            set(PYCLINGO_SUFFIX ".dll")
-        elseif (UNIX)
-            set(PYCLINGO_SUFFIX ".so")
-        else()
-            set(PYCLINGO_SUFFIX ".pyd")
-        endif()
-    endif()
-endif()
+# libreify
+file(COPY "${PROJECT_SOURCE_DIR}/libreify/reify" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libreify/"
+    FILES_MATCHING PATTERN *.h*)
+file(COPY "${PROJECT_SOURCE_DIR}/libreify/src" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libreify/")
 
-add_library(pyclingo SHARED ${source})
-target_link_libraries(pyclingo PRIVATE libpyclingo)
-set_target_properties(pyclingo PROPERTIES
-    FOLDER lib
-    OUTPUT_NAME clingo
-    SUFFIX ${PYCLINGO_SUFFIX}
-    PREFIX "")
-target_include_directories(pyclingo PRIVATE ${PYTHON_INCLUDE_DIRS})
-if (CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-    set_target_properties(pyclingo PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/python)
-endif()
-if (CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-    set_target_properties(pyclingo PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/python)
-endif()
-if (CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
-    set_target_properties(pyclingo PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/python)
-endif()
+# libgringo
+file(COPY "${PROJECT_SOURCE_DIR}/libgringo/gringo" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libgringo/"
+    FILES_MATCHING PATTERN *.h*)
+file(COPY "${PROJECT_SOURCE_DIR}/libgringo/src" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libgringo/")
+# Don't forget pre-generated files in libgringo/gen:
+# src/input/groundtermgrammar/*
+# src/input/nongroundgrammar/*
+# 3 headers in src/input
+file(COPY "${PROJECT_SOURCE_DIR}/libgringo/gen/src" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libgringo/"
+    FILES_MATCHING PATTERN "*.*")
 
-if (PYCLINGO_INSTALL_DIR)
-    install(TARGETS pyclingo
-        RUNTIME DESTINATION ${PYCLINGO_INSTALL_DIR}
-        LIBRARY DESTINATION ${PYCLINGO_INSTALL_DIR})
-endif()
+# clasp
+file(COPY "${PROJECT_SOURCE_DIR}/clasp/clasp" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/")
+file(COPY "${PROJECT_SOURCE_DIR}/clasp/src" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/")
+# Copy clasp/clasp/config.h generated with cmake
+file(COPY "${PROJECT_BINARY_DIR}/clasp/clasp" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/")
+
+# libclingo
+file(COPY "${PROJECT_SOURCE_DIR}/libclingo/src" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libclingo/")
+# Don't forget headers in libclingo/
+file(COPY "${PROJECT_SOURCE_DIR}/libclingo/" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libclingo/"
+    FILES_MATCHING PATTERN *.h*
+)
+file(COPY "${PROJECT_SOURCE_DIR}/clasp/app/clasp_app.cpp" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/app/")
+file(COPY "${PROJECT_SOURCE_DIR}/clasp/app/clasp_app.h" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/app/")
+
+# libpyclingo
+file(COPY "${PROJECT_SOURCE_DIR}/libpyclingo/"
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/libpyclingo/"
+    FILES_MATCHING PATTERN *.cc PATTERN *.h
+)
+
+# pyclingo itself
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/main.cc" DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+
+## Get all sources files and format them into a string that will be inserted in the setup.py
+file(GLOB_RECURSE LIB_SOURCES
+    "${CMAKE_CURRENT_BINARY_DIR}/*.cpp" "${CMAKE_CURRENT_BINARY_DIR}/*.cc"
+)
+# Remove the current path (not needed for setup.py) for each file
+set(PYTHON_STRIPPED_SOURCES)
+foreach(file ${LIB_SOURCES})
+    string(REPLACE "${CMAKE_CURRENT_BINARY_DIR}/" "" file ${file})
+    set(PYTHON_STRIPPED_SOURCES "${PYTHON_STRIPPED_SOURCES}\"${file}\", ")
+endforeach()
+
+# Configure setup.py with project version and sources
+set(SETUP_PY_IN "${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in")
+set(SETUP_PY    "${CMAKE_CURRENT_BINARY_DIR}/setup.py")
+configure_file(${SETUP_PY_IN} ${SETUP_PY})
+
+# Copy additional files that will be integrated in the source package
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/MANIFEST.in" DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY "${PROJECT_SOURCE_DIR}/README.md" DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY "${PROJECT_SOURCE_DIR}/LICENSE.md" DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+
+## Pyclingo targets
+
+# Build
+# timestamp: the output from python setup.py build is not a good candidate to detect
+# if build has to run, because it is placed in architecture- and platform-specific
+# directories like lib.linux-x86_64-2.6.
+# A timestamp file is generated each time the source dependencies changes.
+set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/build")
+add_custom_command(OUTPUT ${OUTPUT}/timestamp
+                   COMMAND ${PYTHON_EXECUTABLE}
+                   ARGS ${SETUP_PY} build
+                   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}/timestamp
+)
+add_custom_target(pyclingo ALL DEPENDS ${OUTPUT}/timestamp COMMENT "Building pyclingo...")
+# Install in dev mode
+add_custom_target(pyclingo_dev_install
+                  COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} develop
+                  COMMENT "Install pyclingo in develop mode...")
+# Uninstall in dev mode
+add_custom_target(pyclingo_dev_uninstall
+                  COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} develop --uninstall
+                  COMMENT "Uninstall pyclingo previously installed in develop mode...")
+# Make a source package
+add_custom_target(pyclingo_dist_package
+                  COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} sdist
+                  COMMENT "Build pyclingo source package...")
+# Make a binary package
+add_custom_target(pyclingo_bdist_wheel_package
+                  COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} bdist_wheel
+                  COMMENT "Build pyclingo binary package...")
+# Proper uninstall if package was installed with a basic "make install"
+add_custom_target(pyclingo_uninstall
+                  COMMAND cat files.txt | xargs rm -rf && rm files.txt
+                  COMMENT "Uninstall pyclingo...")
+# Install with cmake
+install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install --record files.txt)")
