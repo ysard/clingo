@@ -1,0 +1,204 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# clingo
+#
+# Modified work Copyright (c) 2018, Pierre Vignet
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+"""
+setup.py that provides bindings to clingo, a grounder and solver for logic programs.
+https://potassco.org/
+"""
+
+from __future__ import print_function
+from distutils import sysconfig
+import multiprocessing as mpc
+import concurrent.futures
+try:
+    from setuptools import setup, Extension, dist
+except ImportError:
+    raise ImportError("setuptools was not found, please (re)install it!")
+
+__PACKAGE_VERSION__ = "0.2.1"
+__LIBRARY_VERSION__ = "${PROJECT_VERSION}"
+
+################################################################################
+
+def parallel_compile(self, sources,
+                     output_dir=None,
+                     macros=None,
+                     include_dirs=None,
+                     debug=0,
+                     extra_preargs=None,
+                     extra_postargs=None,
+                     depends=None):
+    """Monkey-patch for parallel compilation"""
+    # those lines are copied from distutils.ccompiler.CCompiler directly
+    macros, objects, extra_postargs, pp_opts, build = \
+        self._setup_compile(
+            output_dir, macros, include_dirs, sources, depends, extra_postargs
+        )
+    cc_args = self._get_cc_args(pp_opts, debug, extra_preargs)
+
+    def _single_compile(obj):
+        """Parallel code"""
+        try:
+            src, ext = build[obj]
+        except KeyError:
+            return
+        self._compile(obj, src, ext, cc_args, extra_postargs, pp_opts)
+
+    nb_threads = mpc.cpu_count()-1
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=nb_threads
+    ) as executor:
+        # Start the load operations and mark each future with its object
+        futures_to_obj = \
+            {executor.submit(_single_compile, obj): obj for obj in objects}
+        for future in concurrent.futures.as_completed(futures_to_obj):
+            obj = futures_to_obj[future]
+            try:
+                _ = future.result()
+            except Exception as exc:
+                print('%r generated an exception: %s' % (obj, exc))
+
+    return objects
+
+dist.distutils.ccompiler.CCompiler.compile = parallel_compile
+
+################################################################################
+
+# Delete unwanted flags for C compilation
+# Distutils has the lovely feature of providing all the same flags that
+# Python was compiled with. The result is that adding extra flags is easy,
+# but removing them is a total pain. Doing so involves subclassing the
+# compiler class, catching the arguments and manually removing the offending
+# flag from the argument list used by the compile function.
+# That's the theory anyway, the docs are too poor to actually guide you
+# through what you have to do to make that happen.
+
+def _init_posix(init):
+    def wrapper():
+        init()
+        config_vars = sysconfig.get_config_vars()  # by reference
+
+        if config_vars["MACHDEP"].startswith("sun"):
+            # Sun needs forced gcc/g++ compilation
+            config_vars['CC'] = 'gcc'
+            config_vars['CXX'] = 'g++'
+
+        if config_vars["MACHDEP"].startswith("linux"):
+            # Remove GDB specific debug informations
+            # Remove -Wstrict-prototypes which is valid for C but not for C++
+            for k, v in config_vars.items():
+                for unwanted in (' -g ', '-Wstrict-prototypes'):
+                    if str(v).find(unwanted) != -1:
+                        v = config_vars[k] = str(v).replace(unwanted, ' ')
+
+    return wrapper
+
+sysconfig._init_posix = _init_posix(sysconfig._init_posix)
+
+################################################################################
+
+# Source files
+SOURCES = [${PYTHON_STRIPPED_SOURCES}]
+
+MODULES = [
+    Extension(
+        "clingo",
+        SOURCES,
+        include_dirs=[
+            '.',
+            # libgringo/src/input/ needed by:
+            # clingopath.hh groundtermlexer.hh nongroundlexer.hh
+            # For:
+            # libreify, libgringo, libclingo, libpyclingo
+            'libgringo/',
+
+            # For: libgringo, libpyclingo
+            'libgringo/src/',
+
+            # For:
+            # libpotassco, libreify, libgringo, libclasp, libclingo, libpyclingo
+            'clasp/libpotassco/',
+
+            # libgringo/gringo/graph.hh
+            # For: libreify, libgringo, libpyclingo
+            'libreify/', 'libgringo/',
+
+            # clasp/clasp/config.h ajouté
+            # For: libclasp
+            'clasp/',
+
+            # clasp/app needed by:
+            # clasp_app.h requis par clingo_app.hh,
+            # For: libclingo, libpyclingo,
+            'libclingo', 'clasp/app',
+
+            # needed by the python binding module of pyclingo:
+            # main.cc
+            'libpyclingo',
+        ],
+        extra_compile_args=[
+            "-std=c++14",
+            "-flto",
+            "-O3",
+        ],
+        extra_link_args=[
+            "-flto",
+            "-O3",
+            "-Wl,--as-needed",
+        ],
+        libraries=['pthread'],
+    ),
+]
+
+setup(
+    name="clingo",
+    version=__PACKAGE_VERSION__, # package version; not library version
+    author="Pierre Vignet",
+    author_email="pierre.vignet@irisa.fr",
+    url="https://github.com/potassco/clingo",
+    download_url="https://github.com/potassco/clingo/archive/v${PROJECT_VERSION}.tar.gz",
+    license="MIT",
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        #"Operating System :: OS Independent",
+        #"Operating System :: MacOS",
+        "Operating System :: Unix",
+        "Programming Language :: C++",
+        "Programming Language :: ASP",
+        "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6",
+        "License :: OSI Approved :: MIT License",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
+    ],
+    description="Bindings to clingo {}, a grounder and solver" \
+        "for logic programs. https://potassco.org/".\
+        format(__LIBRARY_VERSION__),
+    long_description=open('README.md').read(),
+    long_description_content_type="text/markdown",
+    ext_modules=MODULES,
+)
