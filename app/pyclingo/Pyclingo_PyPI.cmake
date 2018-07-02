@@ -79,13 +79,13 @@ file(COPY "${PROJECT_SOURCE_DIR}/LICENSE.md" DESTINATION ${CMAKE_CURRENT_BINARY_
 # if build has to run, because it is placed in architecture- and platform-specific
 # directories like lib.linux-x86_64-2.6.
 # A timestamp file is generated each time the source dependencies changes.
-set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/build")
-add_custom_command(OUTPUT ${OUTPUT}/timestamp
+set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/build/timestamp")
+add_custom_command(OUTPUT ${OUTPUT}
                    COMMAND ${PYTHON_EXECUTABLE}
                    ARGS ${SETUP_PY} build
-                   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}/timestamp
+                   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
 )
-add_custom_target(pyclingo_pypi ALL DEPENDS ${OUTPUT}/timestamp COMMENT "Building pyclingo for pypi...")
+add_custom_target(pyclingo_pypi DEPENDS ${OUTPUT} COMMENT "Building pyclingo for pypi...")
 # Install in dev mode
 # This makes symlinks from the actual Python environment to the current module
 # and allows to modify files without to reinstall it.
@@ -106,9 +106,3 @@ add_custom_target(pyclingo_pypi_dist_package
 add_custom_target(pyclingo_pypi_bdist_wheel_package
                   COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} bdist_wheel
                   COMMENT "Build pyclingo for pypi binary package...")
-# Proper uninstall if package was installed with a basic "make install"
-add_custom_target(pyclingo_pypi_uninstall
-                  COMMAND cat files.txt | xargs rm -rf && rm files.txt
-                  COMMENT "Uninstall pyclingo for pypi...")
-# Install with cmake
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install --record files.txt)")
