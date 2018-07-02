@@ -127,33 +127,25 @@ MODULES = [
         SOURCES,
         include_dirs=[
             '.',
+            # For: libreify, libgringo, libclingo, libpyclingo
             # libgringo/src/input/ needed by:
             # clingopath.hh groundtermlexer.hh nongroundlexer.hh
-            # For:
-            # libreify, libgringo, libclingo, libpyclingo
             'libgringo/',
-
             # For: libgringo, libpyclingo
             'libgringo/src/',
-
-            # For:
-            # libpotassco, libreify, libgringo, libclasp, libclingo, libpyclingo
+            # For: libpotassco, libreify, libgringo, libclasp,
+            # libclingo, libpyclingo
             'clasp/libpotassco/',
-
-            # libgringo/gringo/graph.hh
             # For: libreify, libgringo, libpyclingo
+            # Need libgringo/gringo/graph.hh
             'libreify/', 'libgringo/',
-
-            # clasp/clasp/config.h ajouté
             # For: libclasp
             'clasp/',
-
-            # clasp/app needed by:
-            # clasp_app.h requis par clingo_app.hh,
             # For: libclingo, libpyclingo,
+            # clasp/app/clasp_app.h needed by:
+            # clingo_app.hh
             'libclingo', 'clasp/app',
-
-            # needed by the python binding module of pyclingo:
+            # Needed by the python binding module of pyclingo:
             # main.cc
             'libpyclingo',
         ],
@@ -174,11 +166,10 @@ MODULES = [
 setup(
     name="clingo",
     version=__PACKAGE_VERSION__, # package version; not library version
-    author="Pierre Vignet",
+    author="Pierre Vignet", # package author’s name
     author_email="pierre.vignet@irisa.fr",
     url="https://github.com/potassco/clingo",
     download_url="https://github.com/potassco/clingo/archive/v${PROJECT_VERSION}.tar.gz",
-    license="MIT",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
