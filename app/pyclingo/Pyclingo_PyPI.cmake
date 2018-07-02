@@ -99,10 +99,21 @@ add_custom_target(pyclingo_pypi_dev_uninstall
                   COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} develop --uninstall
                   COMMENT "Uninstall pyclingo for pypi previously installed in develop mode...")
 # Make a source package
+# This package can be directly uploaded to PyPI
 add_custom_target(pyclingo_pypi_dist_package
                   COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} sdist
                   COMMENT "Build pyclingo for pypi source package...")
 # Make a binary package
+# This binary package (wheel) can be uploaded on PyPI.
+# This avoids users having to compile the source package.
+#
+# PS: Currently, C++14 can not be compiled in the environment recommended for the builds
+# of the wheels (CentOS 5.11 https://www.python.org/dev/peps/pep-0513/#id40),
+# consequently the binaries compiled outside this environment can not have the tag manylinux1
+# allowing them to be uploaded on pypi. The trick is to compile on a more recent distribution
+# (but almost outdated like Debian Jessie for example) in order to link the library to a version
+# of the lib C compatible with the majority of the recent distributions (by backward compatibility);
+# then simply replace the tag "linux_x86_64" with "manylinux1_x86_64" in the name of the generated whl file.
 add_custom_target(pyclingo_pypi_bdist_wheel_package
                   COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} bdist_wheel
                   COMMENT "Build pyclingo for pypi binary package...")
