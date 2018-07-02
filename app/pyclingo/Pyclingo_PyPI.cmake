@@ -1,4 +1,7 @@
 ## Copy sources of libraries in the current folder to prepare setuptools source package
+# Why do we need to copy all sources here before the packaging ?
+# Setuptools doesn't know about the out of source build. In order to fix this,
+# all Python and C sources have to be copied in the python source tree into the CMAKE_CURRENT_BINARY_DIR.
 
 # libpotassco
 file(COPY "${PROJECT_SOURCE_DIR}/clasp/libpotassco/potassco" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/libpotassco/"
@@ -22,6 +25,7 @@ file(COPY "${PROJECT_SOURCE_DIR}/libgringo/gen/src" DESTINATION "${CMAKE_CURRENT
     FILES_MATCHING PATTERN "*.*")
 
 # clasp
+# Headers and .inl files
 file(COPY "${PROJECT_SOURCE_DIR}/clasp/clasp" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/")
 file(COPY "${PROJECT_SOURCE_DIR}/clasp/src" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/clasp/")
 # Copy clasp/clasp/config.h generated with cmake
@@ -83,6 +87,10 @@ add_custom_command(OUTPUT ${OUTPUT}/timestamp
 )
 add_custom_target(pyclingo_pypi ALL DEPENDS ${OUTPUT}/timestamp COMMENT "Building pyclingo for pypi...")
 # Install in dev mode
+# This makes symlinks from the actual Python environment to the current module
+# and allows to modify files without to reinstall it.
+# Moreover, this install/uninstall method is much proper than the old and deprecated one:
+# "python setup.py install"
 add_custom_target(pyclingo_pypi_dev_install
                   COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} develop
                   COMMENT "Install pyclingo for pypi in develop mode...")
