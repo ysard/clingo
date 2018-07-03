@@ -41,11 +41,65 @@ except ImportError:
                       "Command: pip install futures")
 try:
     from setuptools import setup, Extension, dist
+    from setuptools.command.build_ext import build_ext as _build_ext
 except ImportError:
     raise ImportError("setuptools was not found, please (re)install it!")
 
 __PACKAGE_VERSION__ = "0.2.1"
 __LIBRARY_VERSION__ = "${PROJECT_VERSION}"
+
+# Definition of  various arguments specific to compilers
+DEFINE_MACROS = [('PYCLINGO_NO_VISIBILITY', None), ('CLINGO_NO_VISIBILITY', None)]
+EXTRA_ARGS = {
+    'msvc': {
+        'extra_compile_args':
+            ['/std:c++14', '/LTCG', '/GL', '/O2', '/W4', '/GS-',
+             '/D_SCL_SECURE_NO_WARNINGS', '/bigobj'],
+        'extra_link_args':
+            ['/std:c++14', '/LTCG', '/GL', '/O2', '/W4', '/GS-',
+             '/D_SCL_SECURE_NO_WARNINGS', '/bigobj'],
+    },
+    'mingw32': {
+        'extra_compile_args': ['-std=c++14', '-O3', '-Wa,-mbig-obj'],
+        'extra_link_args': ['-O3', '-Wl,--as-needed'],
+        # Macros used to fix compilation via mingw32
+        # hypot:
+        # https://stackoverflow.com/questions/10660524/error-building-boost-1-49-0-with-gcc-4-7-0/
+        # pyconfig.h on Windows defines
+        # hypot as _hypot which subsequently cripples the declaration of hypot
+        # in <math.h> and ultimately breaks the using declaration in <cmath>
+        #
+        # MS_WIN64:
+        # https://stackoverflow.com/questions/2842469/python-undefined-reference-to-imp-py-initmodule4
+        # Fix undefined reference to `_imp __Py_InitModule4'
+        'define_macros': [('_hypot', 'hypot'), ('MS_WIN64', None)],
+    },
+    'unix': {
+        'extra_compile_args': ['-std=c++14', '-flto', '-O3'],
+        'extra_link_args': ['-flto', '-O3', '-Wl,--as-needed'],
+    }
+}
+EXTRA_ARGS = defaultdict(list, EXTRA_ARGS)
+
+
+class build_ext(_build_ext):
+    """Wrapper for build_ext class from setuptools.
+
+    This wrapper is used to set specific compiler args in order to build
+    the extensions.
+    """
+    def build_extensions(self):
+        """Assign arguments to the current compiler.
+
+        Possible compilers: msvc, mingw32, unix
+        """
+        compiler = self.compiler.compiler_type
+        for ext in self.extensions:
+            for extra_arg, args in EXTRA_ARGS[compiler].items():
+                # Just add custom args without ovewrite previous ones
+                ext.__dict__[extra_arg] = ext.__dict__[extra_arg] or []
+                ext.__dict__[extra_arg] += args
+        _build_ext.build_extensions(self)
 
 ################################################################################
 
@@ -166,16 +220,7 @@ MODULES = [
             # main.cc
             'libpyclingo',
         ],
-        extra_compile_args=[
-            "-std=c++14",
-            "-flto",
-            "-O3",
-        ],
-        extra_link_args=[
-            "-flto",
-            "-O3",
-            "-Wl,--as-needed",
-        ],
+        define_macros=DEFINE_MACROS,
         libraries=['pthread'],
     ),
 ]
@@ -209,4 +254,5 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
     ext_modules=MODULES,
+    cmdclass={'build_ext': build_ext},
 )
