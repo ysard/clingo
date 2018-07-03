@@ -30,7 +30,14 @@ https://potassco.org/
 from __future__ import print_function
 from distutils import sysconfig
 import multiprocessing as mpc
-import concurrent.futures
+from collections import defaultdict
+try:
+    # futures has never been included in Python 2.x core.
+    import concurrent.futures
+except ImportError:
+    raise ImportError("concurrent.futures module was not found,\n\tyou may "
+                      "prefer to install it for a very low compile speed.\n\t"
+                      "Command: pip install futures")
 try:
     from setuptools import setup, Extension, dist
 except ImportError:
@@ -81,7 +88,12 @@ def parallel_compile(self, sources,
 
     return objects
 
-dist.distutils.ccompiler.CCompiler.compile = parallel_compile
+try:
+    # futures has never been included in Python 2.x core.
+    import concurrent.futures
+    dist.distutils.ccompiler.CCompiler.compile = parallel_compile
+except ImportError:
+    pass
 
 ################################################################################
 
