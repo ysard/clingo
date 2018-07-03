@@ -31,6 +31,7 @@ from __future__ import print_function
 from distutils import sysconfig
 import multiprocessing as mpc
 from collections import defaultdict
+import sys
 try:
     # futures has never been included in Python 2.x core.
     import concurrent.futures
@@ -107,10 +108,10 @@ except ImportError:
 # through what you have to do to make that happen.
 
 def _init_posix(init):
+    """Initialize the module as appropriate for POSIX systems."""
     def wrapper():
         init()
         config_vars = sysconfig.get_config_vars()  # by reference
-
         if config_vars["MACHDEP"].startswith("sun"):
             # Sun needs forced gcc/g++ compilation
             config_vars['CC'] = 'gcc'
@@ -123,10 +124,14 @@ def _init_posix(init):
                 for unwanted in (' -g ', '-Wstrict-prototypes'):
                     if str(v).find(unwanted) != -1:
                         v = config_vars[k] = str(v).replace(unwanted, ' ')
-
     return wrapper
 
-sysconfig._init_posix = _init_posix(sysconfig._init_posix)
+if sys.platform != 'win32':
+    # Posix platforms
+    # Avoid ImportError: _sysconfigdata on Windows
+    sysconfig._init_posix = _init_posix(sysconfig._init_posix)
+    # When build_ext is imported, _init_posix() is never called automatically
+    sysconfig._init_posix()
 
 ################################################################################
 
